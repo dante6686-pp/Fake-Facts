@@ -1,185 +1,281 @@
 import { QUESTIONS } from "./questions.js";
 
-// 🔥 Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getDatabase,
   ref,
   set,
-  onValue,
-  update
+  get,
+  update,
+  onValue
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// 👉 WSTAW SWÓJ CONFIG
+// 🔧 FIREBASE CONFIG
 const firebaseConfig = {
-  apiKey: "XXX",
-  authDomain: "XXX",
-  databaseURL: "XXX",
-  projectId: "XXX"
+  apiKey: "AIzaSyD5DkIS7edDY14nW3xg3ZOrlx5ASu5jyak",
+  authDomain: "fake-facts.firebaseapp.com",
+  projectId: "fake-facts",
+  storageBucket: "fake-facts.firebasestorage.app",
+  messagingSenderId: "119462662606",
+  appId: "1:119462662606:web:68462cb69839825e951b9f",
+  measurementId: "G-FL7PYZX8YD"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// 🔧 STATE
-let playerId = Math.random().toString(36).slice(2);
+// =========================
+// STATE
+// =========================
+let playerId = crypto.randomUUID();
 let roomId = "";
-let playerName = "";
+let isHost = false;
 let selectedAnswer = null;
 
-// 🎮 DOM
-const joinBtn = document.getElementById("joinBtn");
+// =========================
+// DOM
+// =========================
 const lobby = document.getElementById("lobby");
 const game = document.getElementById("game");
 const results = document.getElementById("results");
 
+const nameInput = document.getElementById("nameInput");
+const roomInput = document.getElementById("roomInput");
+
+const roleInfo = document.getElementById("roleInfo");
+
 const questionText = document.getElementById("questionText");
 const optionsDiv = document.getElementById("options");
-const timerDiv = document.getElementById("timer");
+const status = document.getElementById("status");
 
-// 🚀 JOIN
-joinBtn.onclick = () => {
-  playerName = document.getElementById("nameInput").value;
-  roomId = document.getElementById("roomInput").value;
+// =========================
+// CREATE ROOM (HOST)
+// =========================
+document.getElementById("createBtn").onclick = async () => {
+  const name = nameInput.value;
+  roomId = roomInput.value || crypto.randomUUID().slice(0, 5);
+  isHost = true;
 
-  if (!playerName || !roomId) return;
+  await set(ref(db, `rooms/${roomId}`), {
+    state: {
+      questionIndex: 0,
+      phase: "lobby"
+    },
+    players: {}
+  });
+
+  joinRoom(name);
+};
+
+// =========================
+// JOIN ROOM
+// =========================
+document.getElementById("joinBtn").onclick = () => {
+  const name = nameInput.value;
+  roomId = roomInput.value;
+
+  isHost = false;
+  joinRoom(name);
+};
+
+// =========================
+// JOIN COMMON
+// =========================
+function joinRoom(name) {
+  if (!name || !roomId) return;
 
   const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
 
   set(playerRef, {
-    name: playerName,
+    name,
     score: 0,
     answer: null
   });
 
-  startGame();
-};
-
-// 🎯 START
-function startGame() {
   lobby.classList.add("hidden");
   game.classList.remove("hidden");
 
-  const roomRef = ref(db, `rooms/${roomId}`);
+  roleInfo.innerText = isHost ? "HOST" : "PLAYER";
 
-  // jeśli pierwszy gracz → start gry
-  set(ref(db, `rooms/${roomId}/state`), {
-    questionIndex: 0,
-    phase: "playing"
-  });
+  listenRoom();
 
-  listenGame();
+  if (isHost) {
+    startGame();
+  }
 }
 
-// 👂 LISTENER
-function listenGame() {
+// =========================
+// START GAME (HOST ONLY)
+// =========================
+async function startGame() {
+  await update(ref(db, `rooms/${roomId}/state`), {
+    phase: "playing",
+    questionIndex: 0
+  });
+
+  loadQuestion(0);
+}
+
+// =========================
+// LISTEN ROOM
+// =========================
+function listenRoom() {
   const roomRef = ref(db, `rooms/${roomId}`);
 
   onValue(roomRef, (snap) => {
     const data = snap.val();
     if (!data) return;
 
-    const q = QUESTIONS[data.state.questionIndex];
-    renderQuestion(q);
+    const state = data.state;
+    const q = QUESTIONS[state.questionIndex];
+
+    if (!q) return;
+
+    if (state.phase === "playing") {
+      renderQuestion(q, data.players);
+    }
+
+    if (state.phase === "reveal") {
+      showReveal(q, data.players);
+    }
+
+    if (state.phase === "results") {
+      showResults(data.players);
+    }
   });
 }
 
-// 🧠 RENDER
-function renderQuestion(q) {
+// =========================
+// RENDER QUESTION
+// =========================
+function renderQuestion(q, players) {
   questionText.innerText = q.text;
   optionsDiv.innerHTML = "";
+  status.innerText = "Wybierz odpowiedź...";
 
-  q.options.forEach((opt, i) => {
+  Object.entries(q.options).forEach((opt, i) => {
     const btn = document.createElement("button");
-    btn.innerText = opt;
+    btn.innerText = opt[1];
 
-    btn.onclick = () => answer(i);
+    btn.onclick = () => submitAnswer(i);
 
     optionsDiv.appendChild(btn);
   });
 }
 
-// 🧨 ANSWER
-function answer(index) {
+// =========================
+// ANSWER
+// =========================
+function submitAnswer(index) {
   if (selectedAnswer !== null) return;
 
   selectedAnswer = index;
 
-  const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
-
-  update(playerRef, {
+  update(ref(db, `rooms/${roomId}/players/${playerId}`), {
     answer: index
   });
 
-  // sprawdź po 3 sekundach
-  setTimeout(checkAnswers, 3000);
+  checkIfAllAnswered();
 }
 
-// 🧮 CHECK
-function checkAnswers() {
-  const roomRef = ref(db, `rooms/${roomId}`);
+// =========================
+// CHECK IF ALL ANSWERED
+// =========================
+async function checkIfAllAnswered() {
+  const snap = await get(ref(db, `rooms/${roomId}/players`));
+  const players = snap.val();
 
-  onValue(roomRef, (snap) => {
-    const data = snap.val();
-    if (!data) return;
+  const allAnswered = Object.values(players)
+    .every(p => p.answer !== null);
 
-    const q = QUESTIONS[data.state.questionIndex];
-
-    Object.entries(data.players).forEach(([id, p]) => {
-      if (p.answer === q.correct) {
-        update(ref(db, `rooms/${roomId}/players/${id}`), {
-          score: (p.score || 0) + 100
-        });
-      }
-    });
-
-    nextQuestion(data.state.questionIndex);
-  }, { onlyOnce: true });
+  if (allAnswered && isHost) {
+    revealAnswers(players);
+  }
 }
 
-// ➡️ NEXT
-function nextQuestion(index) {
+// =========================
+// REVEAL (HOST)
+// =========================
+async function revealAnswers(players) {
+  const qIndexSnap = await get(ref(db, `rooms/${roomId}/state/questionIndex`));
+  const qIndex = qIndexSnap.val();
+
+  const q = QUESTIONS[qIndex];
+
+  // scoring
+  Object.entries(players).forEach(([id, p]) => {
+    if (p.answer === q.correct) {
+      update(ref(db, `rooms/${roomId}/players/${id}`), {
+        score: (p.score || 0) + 100
+      });
+    }
+  });
+
+  await update(ref(db, `rooms/${roomId}/state`), {
+    phase: "reveal"
+  });
+
+  setTimeout(nextQuestion, 3000);
+}
+
+// =========================
+// NEXT QUESTION
+// =========================
+async function nextQuestion() {
   selectedAnswer = null;
 
-  if (index + 1 >= QUESTIONS.length) {
-    showResults();
+  const snap = await get(ref(db, `rooms/${roomId}/state`));
+  const state = snap.val();
+
+  const next = state.questionIndex + 1;
+
+  if (next >= QUESTIONS.length) {
+    await update(ref(db, `rooms/${roomId}/state`), {
+      phase: "results"
+    });
     return;
   }
 
-  update(ref(db, `rooms/${roomId}/state`), {
-    questionIndex: index + 1
+  await update(ref(db, `rooms/${roomId}/state`), {
+    questionIndex: next,
+    phase: "playing"
   });
 
   // reset answers
-  const playersRef = ref(db, `rooms/${roomId}/players`);
-  onValue(playersRef, (snap) => {
-    const players = snap.val();
+  const playersSnap = await get(ref(db, `rooms/${roomId}/players`));
+  const players = playersSnap.val();
 
-    Object.keys(players).forEach(id => {
-      update(ref(db, `rooms/${roomId}/players/${id}`), {
-        answer: null
-      });
+  Object.keys(players).forEach(id => {
+    update(ref(db, `rooms/${roomId}/players/${id}`), {
+      answer: null
     });
-  }, { onlyOnce: true });
+  });
 }
 
-// 🏆 RESULTS
-function showResults() {
+// =========================
+// REVEAL UI
+// =========================
+function showReveal(q, players) {
+  questionText.innerText = `ODPOWIEDŹ: ${q.explanation}`;
+  optionsDiv.innerHTML = "";
+  status.innerText = "Revealed 🔥";
+}
+
+// =========================
+// RESULTS
+// =========================
+function showResults(players) {
   game.classList.add("hidden");
   results.classList.remove("hidden");
 
   const scoreboard = document.getElementById("scoreboard");
+  scoreboard.innerHTML = "";
 
-  const roomRef = ref(db, `rooms/${roomId}`);
-
-  onValue(roomRef, (snap) => {
-    const data = snap.val();
-    scoreboard.innerHTML = "";
-
-    Object.values(data.players).forEach(p => {
+  Object.values(players)
+    .sort((a, b) => b.score - a.score)
+    .forEach(p => {
       const div = document.createElement("div");
       div.innerText = `${p.name}: ${p.score}`;
       scoreboard.appendChild(div);
     });
-  });
 }
