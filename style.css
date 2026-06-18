@@ -1,0 +1,22 @@
+body {
+  font-family: sans-serif;
+  background: #111;
+  color: #fff;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+button {
+  padding: 10px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+#options button {
+  display: block;
+  width: 80%;
+  margin: 10px auto;
+}
