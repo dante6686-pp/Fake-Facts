@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Broken Truth</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <div id="lobby">
+    <input id="nameInput" placeholder="Nick" />
+    <input id="roomInput" placeholder="Room ID" />
+    <button id="joinBtn">JOIN</button>
+  </div>
+
+  <div id="game" class="hidden">
+    <h2 id="questionText"></h2>
+    <div id="options"></div>
+    <div id="timer"></div>
+  </div>
+
+  <div id="results" class="hidden">
+    <h2>Wyniki</h2>
+    <div id="scoreboard"></div>
+  </div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
