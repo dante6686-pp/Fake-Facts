@@ -1,26 +1,20 @@
 export const QUESTIONS = [
   {
-    id: 1,
-    text: "Woda wrze w temperaturze 90°C.",
-    options: [
-      "Temperatura 90°C",
-      "Woda",
-      "Wrzenie",
-      "Brak błędu"
-    ],
-    correct: 0,
+    text: "Woda wrze w 90°C.",
+    options: ["Prawda", "Błąd: temperatura", "Błąd: woda", "Brak błędu"],
+    correct: 1,
     explanation: "Woda wrze w 100°C (na poziomie morza)."
   },
   {
-    id: 2,
-    text: "Na fladze USA znajduje się 51 gwiazd.",
-    options: [
-      "USA",
-      "51 gwiazd",
-      "Flaga",
-      "Brak błędu"
-    ],
+    text: "Na fladze USA jest 51 gwiazd.",
+    options: ["Prawda", "Błąd: liczba gwiazd", "Błąd: flaga", "Brak błędu"],
     correct: 1,
-    explanation: "USA ma 50 stanów, więc 50 gwiazd."
+    explanation: "USA ma 50 stanów = 50 gwiazd."
+  },
+  {
+    text: "Człowiek ma 2 serca.",
+    options: ["Prawda", "Błąd: liczba serc", "Błąd: człowiek", "Brak błędu"],
+    correct: 1,
+    explanation: "Człowiek ma jedno serce."
   }
 ];
